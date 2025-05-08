@@ -67,28 +67,62 @@ def detect_and_predict_mask(frame, faceNet, maskNet):
     return (locs, preds)
 
 def main():
+    # Check if required files exist
+    required_files = [
+        "face_detector/deploy.prototxt",
+        "face_detector/res10_300x300_ssd_iter_140000.caffemodel",
+        "mask_detector.model"
+    ]
+    
+    for file in required_files:
+        if not os.path.exists(file):
+            print(f"Error: Required file '{file}' not found!")
+            print("Please run download_models.py first to download the required model files.")
+            return
+
+    print("Loading face detector model...")
     # Load face detector model
     prototxtPath = "face_detector/deploy.prototxt"
     weightsPath = "face_detector/res10_300x300_ssd_iter_140000.caffemodel"
-    faceNet = cv2.dnn.readNet(prototxtPath, weightsPath)
+    try:
+        faceNet = cv2.dnn.readNet(prototxtPath, weightsPath)
+        print("Face detector model loaded successfully!")
+    except Exception as e:
+        print(f"Error loading face detector model: {str(e)}")
+        return
 
+    print("Loading mask detector model...")
     # Load the face mask detector model
-    maskNet = load_model("mask_detector.model")
+    try:
+        maskNet = load_model("mask_detector.model")
+        print("Mask detector model loaded successfully!")
+    except Exception as e:
+        print(f"Error loading mask detector model: {str(e)}")
+        return
 
+    print("Initializing video capture...")
     # Initialize video capture
     cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Error: Could not open video capture device!")
+        return
 
+    print("Starting video stream... Press 'q' to quit.")
     while True:
         # Read frame from video capture
         ret, frame = cap.read()
         if not ret:
+            print("Error: Could not read frame from video capture device!")
             break
 
         # Detect faces and predict masks
-        (locs, preds) = detect_and_predict_mask(frame, faceNet, maskNet)
+        try:
+            (locs, preds) = detect_and_predict_mask(frame, faceNet, maskNet)
+        except Exception as e:
+            print(f"Error during detection: {str(e)}")
+            continue
 
-        # Loop over the detected face locations and their corresponding
-        # locations
+        # Loop over the detected face locations and their corresponding predictions
         for (box, pred) in zip(locs, preds):
             # Unpack the bounding box and predictions
             (startX, startY, endX, endY) = box
@@ -102,23 +136,29 @@ def main():
             # Include the probability in the label
             label = "{}: {:.2f}%".format(label, max(mask, withoutMask) * 100)
 
-            # Display the label and bounding box rectangle on the output
-            # frame
+            # Display the label and bounding box rectangle on the output frame
             cv2.putText(frame, label, (startX, startY - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
             cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
 
         # Show the output frame
         cv2.imshow("Frame", frame)
+        
+        # Check for window close button
+        if cv2.getWindowProperty('Frame', cv2.WND_PROP_VISIBLE) < 1:
+            break
+            
+        # Check for 'q' key press
         key = cv2.waitKey(1) & 0xFF
-        print("Key pressed:", key)
         if key == ord("q"):
-            print("Q pressed, exiting.")
+            print("Q key pressed, exiting...")
             break
 
+    print("Cleaning up...")
     # Clean up
     cap.release()
     cv2.destroyAllWindows()
+    print("Done!")
 
 if __name__ == "__main__":
-    main() 
+    main()
